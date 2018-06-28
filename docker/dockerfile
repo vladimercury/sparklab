@@ -1,0 +1,68 @@
+FROM java:openjdk-8
+
+#Update all
+#Install ssh && rsync
+#Generate ssh key
+#Add the created key to the authorized list
+RUN echo 'y' | apt-get update && \
+    echo 'y' | apt-get upgrade && \
+    echo 'y' | apt-get install ssh && \
+    echo 'y' | apt-get install rsync
+
+RUN ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' && \
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+COPY ssh_config /usr/local/ssh_conf
+RUN mv /usr/local/ssh_conf $HOME/.ssh/config
+
+WORKDIR /usr/local/
+
+#SPARK
+ENV SPARK_VERSION=2.3.0
+ENV SPARK_HOME=/usr/local/spark
+RUN wget http://apache-mirror.rbc.ru/pub/apache/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop2.7.tgz && \
+    tar xzf spark-$SPARK_VERSION-bin-hadoop2.7.tgz && \
+    mv spark-$SPARK_VERSION-bin-hadoop2.7 spark && \
+    rm -rf spark-$SPARK_VERSION-bin-hadoop2.7.tgz
+
+#HADOOP
+ENV HADOOP_VERSION=3.0.2
+ENV HADOOP_HOME=/usr/local/hadoop
+ENV HADOOP_CONF_DIR=${HADOOP_HOME}/etc/hadoop
+RUN wget http://apache-mirror.rbc.ru/pub/apache/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz && \
+    tar xzf hadoop-$HADOOP_VERSION.tar.gz && \
+    mv hadoop-$HADOOP_VERSION hadoop && \
+    rm -rf hadoop-$HADOOP_VERSION.tar.gz
+
+ENV PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$SPARK_HOME/bin:$SPARK_HOME/sbin
+    
+
+WORKDIR /usr/local/app/scripts/
+RUN wget ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz && \
+    gzip -d NASA_access_log_Jul95.gz && \
+    wget ftp://ita.ee.lbl.gov/traces/NASA_access_log_Aug95.gz && \
+    gzip -d NASA_access_log_Aug95.gz
+
+COPY hadoop/* $HADOOP_CONF_DIR/
+COPY spark/* $SPARK_HOME/conf/
+
+RUN chmod +x $HADOOP_CONF_DIR/hadoop-env.sh && \
+    chmod +x $SPARK_HOME/conf/spark-env.sh && \
+    chmod +x $HADOOP_HOME/sbin/start-dfs.sh && \
+    chmod +x $HADOOP_HOME/sbin/start-yarn.sh
+
+
+COPY scripts/* /usr/local/app/scripts/
+RUN chmod +x /usr/local/app/scripts/init.sh
+RUN chmod +x /usr/local/app/scripts/get_results.sh
+RUN chmod +x /usr/local/app/scripts/standalone.sh
+RUN chmod +x /usr/local/app/scripts/yarn.sh
+
+RUN mkdir -p /app/hadoop/tmp && \
+    mkdir -p /usr/local/hadoop_store/hdfs/namenode && \
+    mkdir -p /usr/local/hadoop_store/hdfs/datanode
+
+RUN hdfs namenode -format
+
+EXPOSE 9000 9001 4040 8088 7077
+
+CMD [ "/bin/bash", "-c", "service ssh start; tail -f /dev/null"]

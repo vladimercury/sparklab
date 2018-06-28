@@ -1,0 +1,23 @@
+version: "3"
+services:
+  master:
+    networks:
+      - sparknet
+    image: vladimirkuriy/sparklab:spark
+    ports:
+      - "9000:9000"
+      - "1234:8080"
+      - "4040:4040"
+      - "7077:7077"
+    volumes:
+      - "/usr/local/app/result:/usr/local/app/result"
+
+  worker:
+    networks:
+      - sparknet
+    image: vladimirkuriy/sparklab:spark
+    ports:
+      - "9001:9001"
+
+networks:
+  sparknet:
